@@ -397,6 +397,21 @@ class TargetFinder:
             subdomains.append(f"https://{domain}")
             
         return subdomains
+
+    def load_subdomains_from_file(self, file_path: str) -> list:
+        urls = []
+        with open(file_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                if not line.startswith("http"):
+                    line = "https://" + line
+                urls.append(line)
+        logger.info(f"Loaded {len(urls)} subdomains from file")
+        return urls
+
+
     
     def fetch_javascript_content(self, url: str, js_url: str) -> Optional[str]:
         try:
@@ -1325,7 +1340,30 @@ class TargetFinder:
     def run(self, use_hackerone: bool, use_bugcrowd: bool):
         programs = []
         programs_file = None
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Removed the datetime.now line, as it was incomplete and replaced later.
+
+        # FILE MODE
+        if not use_hackerone and not use_bugcrowd:
+            logger.info(f"Running in FILE MODE using: {self.user_file}")
+
+            # Assign timestamp correctly inside file mode block
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            urls = self.load_subdomains_from_file(self.user_file)
+            results_file = f"xss_targets_{self.injection_type}_{timestamp_str}.txt"
+
+            for url in urls:
+                result = self.test_target(url)
+                if result:
+                    with open(results_file, 'a') as f:
+                        f.write(f"{result['url']} -- {result['score']}\n")
+                    logger.info(f"✅ GOOD TARGET: {result['url']} -- Score {result['score']}")
+                else:
+                    logger.info(f"✗ Not interesting: {url}")
+
+            return
+        
+        # Correctly assign timestamp for regular mode and de-indent the block
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S") 
         
         existing_data = self.load_existing_programs()
         
@@ -1516,38 +1554,50 @@ def main():
         help='Enable verbose output showing detailed analysis of each target'
     )
     
+    parser.add_argument(
+        '--from-file', '-F',
+        type=str,
+        help='Provide a text file containing URLs/subdomains instead of bug bounty programs'
+    )
     args = parser.parse_args()
     
     hackerone_key = os.getenv('HACKERONE_API_KEY')
     bugcrowd_key = os.getenv('BUGCROWD_API_KEY')
     
-    if not hackerone_key and not bugcrowd_key:
-        print("ERROR: No API keys found!")
-        print("Please set at least one of the following environment variables:")
-        print("  - HACKERONE_API_KEY (format: username:token)")
-        print("  - BUGCROWD_API_KEY")
-        sys.exit(1)
-        
-    use_hackerone = True
-    use_bugcrowd = True
-    
-    if args.hackerone and not args.bugcrowd:
-        use_bugcrowd = False
-        if not hackerone_key:
-            print("ERROR: --hackerone flag provided but HACKERONE_API_KEY not set")
-            sys.exit(1)
-    elif args.bugcrowd and not args.hackerone:
+# File mode skip API
+    if args.from_file:
         use_hackerone = False
-        if not bugcrowd_key:
-            print("ERROR: --bugcrowd flag provided but BUGCROWD_API_KEY not set")
-            sys.exit(1)
+        use_bugcrowd = False
     else:
-        if not hackerone_key:
-            use_hackerone = False
-            logger.warning("HACKERONE_API_KEY not set, skipping HackerOne")
-        if not bugcrowd_key:
+        if not hackerone_key and not bugcrowd_key:
+            # FIX 1: Indent the print block
+            print("ERROR: No API keys found!")
+            print("Please set at least one of the following environment variables:")
+            print("  - HACKERONE_API_KEY (format: username:token)")
+            print("  - BUGCROWD_API_KEY")
+            sys.exit(1)
+            
+        # FIX 2: Indent the rest of the API logic block
+        use_hackerone = True
+        use_bugcrowd = True
+        
+        if args.hackerone and not args.bugcrowd:
             use_bugcrowd = False
-            logger.warning("BUGCROWD_API_KEY not set, skipping BugCrowd")
+            if not hackerone_key:
+                print("ERROR: --hackerone flag provided but HACKERONE_API_KEY not set")
+                sys.exit(1)
+        elif args.bugcrowd and not args.hackerone:
+            use_hackerone = False
+            if not bugcrowd_key:
+                print("ERROR: --bugcrowd flag provided but BUGCROWD_API_KEY not set")
+                sys.exit(1)
+        else:
+            if not hackerone_key:
+                use_hackerone = False
+                logger.warning("HACKERONE_API_KEY not set, skipping HackerOne")
+            if not bugcrowd_key:
+                use_bugcrowd = False
+                logger.warning("BUGCROWD_API_KEY not set, skipping BugCrowd")
             
     injection_type = 'reflected-stored' if args.reflected_stored else 'dom-based'
     
@@ -1559,10 +1609,9 @@ def main():
         verbose=args.verbose
     )
     
+    finder.user_file = args.from_file
     finder.run(use_hackerone=use_hackerone, use_bugcrowd=use_bugcrowd)
 
 
 if __name__ == '__main__':
     main()
-
-
