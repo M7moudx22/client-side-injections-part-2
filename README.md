@@ -193,8 +193,20 @@ pip install -r requirements.txt
 
 export HACKERONE_API_KEY="identifier:token"
 export BUGCROWD_API_KEY="your_api_key"
+```
 
-python xss_target_finder.py --reflected-stored
+Run xss_target_finder.py
+```bash
+python xss_target_finder.py --hackerone --reflected-stored --subdomains --verbose
+python xss_target_finder.py --hackerone --dom-based --subdomains --verbose
+python xss_target_finder.py --bugcrowd --reflected-stored --subdomains --verbose
+python xss_target_finder.py --bugcrowd --dom-based --subdomains --verbose
+```
+
+Load urls.txt / waybackurls
+```bash
+python xss_target_finder.py -F <urls.txt> --reflected-stored --verbose
+python xss_target_finder.py -F <urls.txt> --dom-based --verbose
 ```
 
 **Getting API Keys:**
